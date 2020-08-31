@@ -1,0 +1,141 @@
+service:
+  name: auction-backend
+
+plugins:
+  - serverless-bundle
+  - serverless-pseudo-parameters
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  memorySize: 256
+  stage: ${opt:stage, 'dev'}
+  region: "us-east-1"
+
+  iamRoleStatements:
+    - ${file(iam/AuctionsTableIAM.yml):AuctionsTableIAM}
+    - ${file(iam/UsersTableIAM.yml):UsersTableIAM}
+    - ${file(iam/AuctionsBucketIAM.yml):AuctionsBucketIAM}
+    - ${file(iam/SendEmailIAM.yml):SendEmailIAM}
+    - ${file(iam/EmailQueueIAM.yml):EmailQueueIAM}
+
+  environment:
+    AUCTIONS_TABLE_NAME: ${self:custom.AuctionsTable.name}
+    USERS_TABLE_NAME: ${self:custom.UsersTable.name}
+    JWT_SECRET: jwtsecret-${self:provider.stage}
+    AUCTIONS_BUCKET_NAME: ${self:custom.AuctionsBucket.name}
+    EMAIL_QUEUE_URL: ${self:custom.emailQueue.url}
+
+resources:
+  Resources:
+    AuctionsTable: ${file(resources/AuctionsTable.yml):AuctionsTable}
+    UsersTable: ${file(resources/UsersTable.yml):UsersTable}
+    AuctionsBucket: ${file(resources/AuctionsBucket.yml):AuctionsBucket}
+    AuctionsBucketPolicy: ${file(resources/AuctionsBucket.yml):AuctionsBucketPolicy}
+    EmailQueue: ${file(resources/EmailQueue.yml):EmailQueue}
+
+functions:
+  registerUser:
+    handler: src/handlers/registerUser.handler
+    events:
+      - http:
+          method: POST
+          path: /register
+          cors: true
+
+  userLogin:
+    handler: src/handlers/userLogin.handler
+    events:
+      - http:
+          method: POST
+          path: /login
+          cors: true
+
+  verifyToken:
+    handler: src/handlers/verifyToken.handler
+
+  createAuction:
+    handler: src/handlers/createAuction.handler
+    events:
+      - http:
+          method: POST
+          path: /auction
+          cors: true
+          authorizer:
+            name: verifyToken
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 3600
+
+  getAuctions:
+    handler: src/handlers/getAuctions.handler
+    events:
+      - http:
+          method: GET
+          path: /auctions
+          cors: true
+          authorizer:
+            name: verifyToken
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 3600
+
+  getAuction:
+    handler: src/handlers/getAuction.handler
+    events:
+      - http:
+          method: GET
+          path: /auction/{id}
+          cors: true
+          authorizer:
+            name: verifyToken
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 3600
+
+  placeBid:
+    handler: src/handlers/placeBid.handler
+    events:
+      - http:
+          method: PATCH
+          path: /auction/{id}/bid
+          cors: true
+          authorizer:
+            name: verifyToken
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 3600
+
+  uploadPictureToAuctionItem:
+    handler: src/handlers/uploadPictureToAuctionItem.handler
+    events:
+      - http:
+          method: PATCH
+          path: /auction/{id}/uploadpicture
+          cors: true
+          authorizer:
+            name: verifyToken
+            identitySource: method.request.header.Authorization
+            resultTtlInSeconds: 3600
+
+  processAuctions:
+    handler: src/handlers/processAuctions.handler
+
+  sendEmail:
+    handler: src/handlers/sendEmail.handler
+    events:
+      - sqs:
+          arn: ${self:custom.emailQueue.arn}
+          batchSize: 1
+
+custom:
+  AuctionsTable:
+    name: !Ref AuctionsTable
+    arn: !GetAtt AuctionsTable.Arn
+  UsersTable:
+    name: !Ref UsersTable
+    arn: !GetAtt UsersTable.Arn
+  AuctionsBucket:
+    name: ${self:provider.stage}.auctionhouse.atmakurikirankumar.com
+  emailQueue:
+    name: EmailQueue-${self:provider.stage}
+    arn: !GetAtt EmailQueue.Arn
+    url: !Ref EmailQueue
+  bundle:
+    linting: false
