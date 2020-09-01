@@ -14,3 +14,7 @@ Then, cLone this repository. cd into this folder and do npm install.
 After all dependencies are insatlled execute this command and see the magic of all APIs were created in your AWS account.
 
 sls deploy -v
+------------------------
+Created a Front end as well.
+
+Clone the frontend folder and cd into the directory and do npm install. Create a .env file under the root folder and create environment variable REACT_APP_AUCTIONS_ENDPOINT. Value will equal to your backend api url created in the backend process.
